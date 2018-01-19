@@ -53,10 +53,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"math"
 
-	"github.com/spaolacci/murmur3"
+	//"github.com/spaolacci/murmur3"
 	"github.com/willf/bitset"
 )
 
@@ -89,29 +90,41 @@ func From(data []uint64, k uint) *BloomFilter {
 	return &BloomFilter{m, k, bitset.From(data)}
 }
 
+func bytesToUints(vs []byte) []uint32 {
+	out := make([]uint32, len(vs)/4)
+	for i := range out {
+		out[i] = binary.LittleEndian.Uint32(vs[i*4:])
+	}
+	return out
+}
+
 // baseHashes returns the four hash values of data that are used to create k
 // hashes
-func baseHashes(data []byte) [4]uint64 {
-	a1 := []byte{1} // to grab another bit of data
-	hasher := murmur3.New128()
-	hasher.Write(data) // #nosec
-	v1, v2 := hasher.Sum128()
-	hasher.Write(a1) // #nosec
-	v3, v4 := hasher.Sum128()
-	return [4]uint64{
-		v1, v2, v3, v4,
+func (f *BloomFilter) baseHashes(data []byte) []uint32 {
+	//use golang buildin lib instead
+	hasher := fnv.New128()
+	hasher.Write(data)
+
+	result := []uint32{}
+
+	i := 0
+	for {
+		temp1 := hasher.Sum(nil)
+		temp2 := bytesToUints(temp1)
+
+		result = append(result, temp2...)
+		if len(result) >= int(f.k) {
+			return result
+		}
+		//write a extra byte to give new hash result
+		hasher.Write([]byte{byte(i % 256)})
+		i++
 	}
 }
 
 // location returns the ith hashed location using the four base hash values
-func location(h [4]uint64, i uint) uint64 {
-	ii := uint64(i)
-	return h[ii%2] + ii*h[2+(((ii+(ii%2))%4)/2)]
-}
-
-// location returns the ith hashed location using the four base hash values
-func (f *BloomFilter) location(h [4]uint64, i uint) uint {
-	return uint(location(h, i) % uint64(f.m))
+func (f *BloomFilter) location(h []uint32, i uint) uint {
+	return uint(h[i]) % f.m
 }
 
 // EstimateParameters estimates requirements for m and k.
@@ -142,7 +155,7 @@ func (f *BloomFilter) K() uint {
 
 // Add data to the Bloom Filter. Returns the filter (allows chaining)
 func (f *BloomFilter) Add(data []byte) *BloomFilter {
-	h := baseHashes(data)
+	h := f.baseHashes(data)
 	for i := uint(0); i < f.k; i++ {
 		f.b.Set(f.location(h, i))
 	}
@@ -180,7 +193,7 @@ func (f *BloomFilter) AddString(data string) *BloomFilter {
 // If true, the result might be a false positive. If false, the data
 // is definitely not in the set.
 func (f *BloomFilter) Test(data []byte) bool {
-	h := baseHashes(data)
+	h := f.baseHashes(data)
 	for i := uint(0); i < f.k; i++ {
 		if !f.b.Test(f.location(h, i)) {
 			return false
@@ -198,9 +211,9 @@ func (f *BloomFilter) TestString(data string) bool {
 
 // TestLocations returns true if all locations are set in the BloomFilter, false
 // otherwise.
-func (f *BloomFilter) TestLocations(locs []uint64) bool {
+func (f *BloomFilter) TestLocations(locs []uint) bool {
 	for i := 0; i < len(locs); i++ {
-		if !f.b.Test(uint(locs[i] % uint64(f.m))) {
+		if !f.b.Test(locs[i] % f.m) {
 			return false
 		}
 	}
@@ -211,7 +224,7 @@ func (f *BloomFilter) TestLocations(locs []uint64) bool {
 // Returns the result of Test.
 func (f *BloomFilter) TestAndAdd(data []byte) bool {
 	present := true
-	h := baseHashes(data)
+	h := f.baseHashes(data)
 	for i := uint(0); i < f.k; i++ {
 		l := f.location(h, i)
 		if !f.b.Test(l) {
@@ -349,14 +362,13 @@ func (f *BloomFilter) Equal(g *BloomFilter) bool {
 }
 
 // Locations returns a list of hash locations representing a data item.
-func Locations(data []byte, k uint) []uint64 {
-	locs := make([]uint64, k)
+func (f *BloomFilter) Locations(data []byte) []uint {
+	h := f.baseHashes(data)
 
-	// calculate locations
-	h := baseHashes(data)
-	for i := uint(0); i < k; i++ {
-		locs[i] = location(h, i)
+	result := make([]uint, f.k, f.k)
+	for i := uint(0); i < f.k; i++ {
+		result[i] = f.location(h, i)
 	}
 
-	return locs
+	return result
 }
