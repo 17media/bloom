@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"math"
 	"testing"
+
+	"math/rand"
 )
 
 // This implementation of Bloom filters is _not_
@@ -237,12 +239,9 @@ func TestLocation(t *testing.T) {
 	elements := make([][]byte, rounds)
 
 	for x := uint(0); x < rounds; x++ {
-		ctrlist := make([]uint8, 4)
-		ctrlist[0] = uint8(x)
-		ctrlist[1] = uint8(x >> 8)
-		ctrlist[2] = uint8(x >> 16)
-		ctrlist[3] = uint8(x >> 24)
-		data := []byte(ctrlist)
+		data := make([]byte, 100)
+		rand.Read(data)
+
 		elements[x] = data
 	}
 
