@@ -53,11 +53,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
+	//"hash/fnv"
 	"io"
 	"math"
 
-	//"github.com/spaolacci/murmur3"
+	"github.com/spaolacci/murmur3"
 	"github.com/willf/bitset"
 )
 
@@ -101,8 +101,7 @@ func bytesToUints(vs []byte) []uint32 {
 // baseHashes returns the four hash values of data that are used to create k
 // hashes
 func (f *BloomFilter) baseHashes(data []byte) []uint32 {
-	//use golang buildin lib instead
-	hasher := fnv.New128()
+	hasher := murmur3.New128()
 	hasher.Write(data)
 
 	result := []uint32{}
