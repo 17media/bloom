@@ -98,6 +98,17 @@ func bytesToUints(vs []byte) []uint32 {
 	return out
 }
 
+// return the approximate the number of items in the filter
+// reference: https://en.wikipedia.org/wiki/Bloom_filter#Approximating_the_number_of_items_in_a_Bloom_filter
+func (f *BloomFilter) ApproxCount() uint {
+	m0 := float64(f.m)
+	k0 := float64(f.k)
+	count := float64(f.b.Count())
+	n := -1 * m0 / k0 * math.Log(1-(count/m0))
+
+	return uint(n)
+}
+
 // baseHashes returns the four hash values of data that are used to create k
 // hashes
 func (f *BloomFilter) baseHashes(data []byte) []uint32 {
