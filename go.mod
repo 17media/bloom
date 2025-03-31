@@ -1,6 +1,6 @@
 module github.com/17media/bloom
 
-go 1.13
+go 1.23
 
 require (
 	github.com/spaolacci/murmur3 v1.1.0
